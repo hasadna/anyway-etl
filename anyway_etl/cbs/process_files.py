@@ -9,7 +9,8 @@ import dataflows as DF
 
 from .config import (
     CBS_EMAILS_DATA_ROOT_PATH, CBS_FILES_ROOT_PATH,
-    CBS_YEARLY_DIRECTORIES_ROOT_PATH
+    CBS_YEARLY_DIRECTORIES_ROOT_PATH,
+    CBS_PROCESSED_FILES_ROOT_PATH
 )
 
 
@@ -29,7 +30,7 @@ def extract_zip_files(row):
     zip_filepath = os.path.join(CBS_FILES_ROOT_PATH, row['filename'])
     row['extracted_path'] = row['filename'].replace('.zip', '')
     extracted_path = os.path.join(CBS_FILES_ROOT_PATH, row['extracted_path'])
-    print("Extracting {} -> {}".format(zip_filepath, extracted_path))
+    # print("Extracting {} -> {}".format(zip_filepath, extracted_path))
     shutil.rmtree(extracted_path, ignore_errors=True)
     os.makedirs(extracted_path)
     with zipfile.ZipFile(zip_filepath, "r") as zf:
@@ -38,7 +39,7 @@ def extract_zip_files(row):
 
 def update_cbs_files_names(row):
     extracted_path = os.path.join(CBS_FILES_ROOT_PATH, row['extracted_path'])
-    print('updating cbs file names {}'.format(extracted_path))
+    # print('updating cbs file names {}'.format(extracted_path))
     files = sorted([path for path in os.listdir(extracted_path)])
     for file in files:
         file_path = os.path.join(extracted_path, file)
@@ -63,37 +64,45 @@ def get_provider_code_and_year(row):
     row['year'] = int(year)
 
 
-def save_to_directory_structure(row):
-    extracted_path = os.path.join(CBS_FILES_ROOT_PATH, row['extracted_path'])
-    provider_code = row['provider_code']
-    year = row['year']
-    base_file_path = os.path.join(
-        CBS_YEARLY_DIRECTORIES_ROOT_PATH,
-        'accidents_type_{}'.format(provider_code),
-        str(year)
-    )
-    shutil.rmtree(base_file_path, ignore_errors=True)
-    os.makedirs(base_file_path)
-    row['num_files'] = 0
-    for file in os.scandir(extracted_path):
-        row['num_files'] += 1
-        target_file_path = os.path.join(base_file_path, os.path.basename(file.path))
-        shutil.copy(file.path, target_file_path)
+def save_to_directory_structure(rows):
+    updated_year_provider_codes = set()
+    for row in rows:
+        row['num_saved_files'] = 0
+        provider_code = row['provider_code']
+        year = row['year']
+        if '{}|{}'.format(year, provider_code) not in updated_year_provider_codes:
+            updated_year_provider_codes.add('{}|{}'.format(year, provider_code))
+            extracted_path = os.path.join(CBS_FILES_ROOT_PATH, row['extracted_path'])
+            base_file_path = os.path.join(
+                CBS_YEARLY_DIRECTORIES_ROOT_PATH,
+                'accidents_type_{}'.format(provider_code),
+                str(year)
+            )
+            print('Saving msgId {} mtime {} to {}'.format(row['msgId'], row['mtime'], base_file_path))
+            shutil.rmtree(base_file_path, ignore_errors=True)
+            os.makedirs(base_file_path)
+            file: os.DirEntry
+            for file in os.scandir(extracted_path):
+                row['num_saved_files'] += 1
+                target_file_path = os.path.join(base_file_path, os.path.basename(file.path))
+                shutil.copy(file.path, target_file_path)
+        yield row
 
 
 def main():
     stats = defaultdict(int)
     _, df_stats = DF.Flow(
         DF.load(os.path.join(CBS_EMAILS_DATA_ROOT_PATH, 'datapackage.json')),
-        DF.sort_rows('mtime', reverse=True),
         DF.add_field('extracted_path', 'string'),
         extract_zip_files,
         update_cbs_files_names,
         DF.add_field('provider_code', 'integer'),
         DF.add_field('year', 'integer'),
         get_provider_code_and_year,
-        DF.add_field('num_files', 'integer'),
+        DF.sort_rows('{year}|{provider_code}', reverse=True),
+        DF.add_field('num_saved_files', 'integer'),
         save_to_directory_structure,
+        DF.dump_to_path(CBS_PROCESSED_FILES_ROOT_PATH),
         DF.printer()
     ).process()
     pprint(df_stats)

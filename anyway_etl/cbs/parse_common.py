@@ -30,6 +30,7 @@ def common_get_data_iterator(load_start_year, stats, get_data_iterator):
                 'accidents_type_{}'.format(provider_code),
                 str(year)
             )
+            print("cbs_files_dir={}".format(cbs_files_dir))
             files_from_cbs = get_files(cbs_files_dir)
             if len(files_from_cbs) == 0:
                 stats['invalid_directories_without_cbs_files'] += 1
@@ -46,6 +47,7 @@ def common_get_data_iterator(load_start_year, stats, get_data_iterator):
 
 def common_main(load_start_year, output_path, get_data_iterator):
     load_start_year = int(load_start_year) if load_start_year else datetime.datetime.now().year - 1
+    print("load_start_year={} output_path={}".format(load_start_year, output_path))
     stats = defaultdict(int)
     _, df_stats = DF.Flow(
         common_get_data_iterator(load_start_year, stats, get_data_iterator),
