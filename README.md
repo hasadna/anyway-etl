@@ -17,3 +17,9 @@ For more advanced documentation see the [docs](docs) directory.
 * Every [release](https://github.com/hasadna/anyway-etl/releases) causes deployment 
   to the Kubernetes cluster's `anyway` environment (the production environment)
 
+## Testing on dev environment before merging
+
+To test changes on dev environment before merging them to main branch - 
+edit the `airflow-scheduler` deployment on `anyway-dev` namespace and set
+`ANYWAY_ETL_BRANCH` env var to the name of the branch with changes you want
+to test. Once testing is done, revert back to `main`.

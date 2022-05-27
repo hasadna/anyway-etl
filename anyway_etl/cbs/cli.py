@@ -14,11 +14,10 @@ def import_emails():
 
 
 @cbs.command()
-@click.option('--limit-rows')
-def process_files(**kwargs):
+def process_files():
     """Extract and process the cbs files"""
     from . import process_files
-    process_files.main(**kwargs)
+    process_files.main()
 
 
 @cbs.command()
